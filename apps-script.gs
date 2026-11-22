@@ -8,8 +8,24 @@ const SHEET_ID = '1v6N65ipkcueUdUQYw3Z9GAnngBmC5q6IzVZlj8Y_d6o';
 const TABS = {
   items:    { name: 'LichTrinh', cols: ['id','day','time','title','place','note','link','done','suggestion','createdAt'] },
   expenses: { name: 'ChiPhi',    cols: ['id','day','title','amount','category','payer','status','note','createdAt'] },
-  memories: { name: 'KyNiem',    cols: ['id','day','title','text','createdAt'] },
+  memories: { name: 'KyNiem',    cols: ['id','day','title','text','createdAt','photo'] },
+  fund:     { name: 'QuyChung',  cols: ['id','day','payer','amount','note','createdAt'] },
 };
+const PHOTO_FOLDER = 'Đà Lạt tháng 12 – ảnh';
+
+function photoFolder_() {
+  const it = DriveApp.getFoldersByName(PHOTO_FOLDER);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(PHOTO_FOLDER);
+}
+function upload_(d) {
+  const mime = /^image\/(jpeg|png|webp|gif)$/.test(d.mime) ? d.mime : 'image/jpeg';
+  const bytes = Utilities.base64Decode(d.b64);
+  if (bytes.length > 10 * 1024 * 1024) throw new Error('too large');
+  const blob = Utilities.newBlob(bytes, mime, 'kyniem-' + Date.now() + (mime === 'image/png' ? '.png' : '.jpg'));
+  const file = photoFolder_().createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return file.getId();
+}
 const BOOL = ['done','suggestion'];
 const NUM = ['amount','createdAt'];
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -20,7 +36,7 @@ function cellOut_(col, v) {
   if (v instanceof Date) return Utilities.formatDate(v, TZ, col === 'time' ? 'HH:mm' : 'yyyy-MM-dd');
   if (BOOL.indexOf(col) >= 0) return v === true || String(v).toUpperCase() === 'TRUE';
   if (NUM.indexOf(col) >= 0) { const n = Number(String(v).replace(/[^\d.-]/g, '')); return isNaN(n) ? 0 : n; }
-  if (col === 'payer') return v === '' || v === null ? null : Number(v);
+  if (col === 'payer') return v === '' || v === null ? null : (String(v) === 'fund' ? 'fund' : Number(v));
   return v === null || v === undefined ? '' : String(v);
 }
 function cellIn_(col, v) {
@@ -50,7 +66,7 @@ function readMembers_() {
   return names;
 }
 function readAll_() {
-  return { items: readTab_('items'), expenses: readTab_('expenses'), memories: readTab_('memories'), members: readMembers_() };
+  return { items: readTab_('items'), expenses: readTab_('expenses'), memories: readTab_('memories'), fund: readTab_('fund'), members: readMembers_() };
 }
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
@@ -71,6 +87,7 @@ function doPost(e) {
   try {
     const req = JSON.parse(e.postData.contents);
     const a = req.action;
+    if (a === 'upload') return json_({ ok: true, id: upload_(req.data || {}) });
     if (a === 'setMembers') {
       const sh = sheet_('ThanhVien');
       const vals = (req.data || []).slice(0, 4).map((n, i) => [String(i), String(n || ('Người ' + (i + 1))).slice(0, 40)]);
