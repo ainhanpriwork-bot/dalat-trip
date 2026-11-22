@@ -535,8 +535,29 @@ function localApi(){
 function dbApi(db){
   return{add:(c,d)=>db.collection(c).add(d),update:(c,i,d)=>db.collection(c).doc(i).update(d),remove:(c,i)=>db.collection(c).doc(i).delete(),setMembers:a=>db.doc('trip/info').set({members:a})};
 }
+/* Google Sheet chung qua Apps Script */
+const SHEET_API='https://script.google.com/macros/s/AKfycbyvX9qM1PtpRKRVYSZoTDtrG6nOqQlYA31Q9c8APdTKR3kFnSn60__uKUAX67R_UT9A/exec';
+const SHEET_URL='https://docs.google.com/spreadsheets/d/1v6N65ipkcueUdUQYw3Z9GAnngBmC5q6IzVZlj8Y_d6o/edit';
+function sheetApi(){
+  let pending=0,lastErr=false;
+  const apply=d=>{if(!d)return;S.items=d.items||[];S.expenses=d.expenses||[];S.memories=d.memories||[];if(Array.isArray(d.members))S.members=d.members;render()};
+  const ok=()=>{if(lastErr){lastErr=false;note('')}};
+  async function load(){if(pending)return;try{const r=await fetch(SHEET_API,{cache:'no-store'});const j=await r.json();if(j.ok&&!pending){apply(j.data);ok()}}catch(e){lastErr=true;note('Chưa kết nối được Google Sheet, đang hiện dữ liệu cũ. Trang sẽ tự thử lại.')}}
+  async function post(body){pending++;try{const r=await fetch(SHEET_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});const j=await r.json();if(!j.ok)throw new Error(j.error||'save failed');pending--;if(!pending)apply(j.data);ok()}catch(e){pending--;lastErr=true;note('Chưa lưu được lên Google Sheet. Kiểm tra mạng rồi thử lại.');load();throw e}}
+  const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  load();
+  setInterval(()=>{if(document.visibilityState==='visible'&&!document.querySelector('dialog[open]'))load()},15000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')load()});
+  return{
+    add:(c,d)=>{const x={id:uid(),...d};S[c].push(x);render();return post({action:'add',col:c,data:x})},
+    update:(c,i,d)=>{const x=S[c].find(r=>r.id===i);if(x)Object.assign(x,d);render();return post({action:'update',col:c,id:i,data:d})},
+    remove:(c,i)=>{S[c]=S[c].filter(r=>r.id!==i);render();return post({action:'remove',col:c,id:i})},
+    setMembers:a=>{S.members=a;render();return post({action:'setMembers',data:a})}
+  };
+}
 async function boot(){
   render();
+  if(SHEET_API){const DEF=window.DEFAULT_DATA;if(DEF)Object.assign(S,JSON.parse(JSON.stringify(DEF)));render();api=sheetApi();return}
   const use=window.claude&&window.claude.use;
   if(!use){api=localApi();note('Thay đổi được lưu trên trình duyệt của máy này, máy khác sẽ không thấy.');render();return}
   const [db,user,as]=await Promise.all([window.claude.use('db'),window.claude.use('user'),window.claude.use('assets')]);
