@@ -59,6 +59,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 
 main .wrap{padding-block:22px 60px;display:grid;gap:22px}
 .notice{background:var(--quy-soft);border-radius:var(--r);padding:10px 14px;font-size:14px}
+.notice:empty{display:none}
 .sec-head{display:flex;flex-wrap:wrap;gap:10px;align-items:end;justify-content:space-between}
 .sec-head h2{font-size:22px;font-weight:800}
 .sec-head p{margin:2px 0 0;color:var(--muted);font-size:14px}
@@ -266,6 +267,7 @@ dialog h2{font-size:19px;font-weight:800}
             <h3>Ai trả bao nhiêu</h3>
             <div class="hint">Tính tiền góp quỹ và tiền tự trả cho các khoản “Đã chi”. Số dương là được nhận lại, số âm là cần trả thêm. Tiền quỹ còn dư sẽ chia lại cho mọi người.</div>
             <div class="people" id="people"></div>
+            <div class="notice" id="unknown-note" style="font-size:13px"></div>
             <div id="settle-wrap"><div class="label" style="margin-bottom:4px">Cách cân bằng</div><ol class="settle" id="settle"></ol></div>
           </div>
         </div>
@@ -485,7 +487,9 @@ function renderMoney(){
   // balances
   const paidBy=Array(N).fill(0),contrib=Array(N).fill(0);let spent=0,fundIn=0,fundOut=0,fundPlan=0;
   for(const f of S.fund){const a=Number(f.amount)||0;fundIn+=a;const p=Number(f.payer);if(f.payer!==''&&f.payer!=null&&p>=0&&p<N)contrib[p]+=a}
-  for(const e of S.expenses){const a=Number(e.amount)||0;if(e.status==='plan'){if(e.payer==='fund')fundPlan+=a;continue}spent+=a;if(e.payer==='fund'){fundOut+=a;continue}const p=Number(e.payer);if(e.payer!==''&&e.payer!=null&&p>=0&&p<N)paidBy[p]+=a}
+  let unknown=0;
+  for(const e of S.expenses){const a=Number(e.amount)||0;if(e.status==='plan'){if(e.payer==='fund')fundPlan+=a;continue}if(e.payer==='fund'){fundOut+=a;spent+=a;continue}const p=Number(e.payer);if(e.payer!==''&&e.payer!=null&&p>=0&&p<N){paidBy[p]+=a;spent+=a}else unknown+=a}
+  $('#unknown-note').textContent=unknown?`Có ${money(unknown)} đã chi nhưng chưa chọn người trả, nên chưa tính vào phần cân bằng. Bấm “Sửa” ở khoản đó để chọn người trả.`:'';
   renderFund(fundIn,fundOut,fundPlan,contrib);
   const share=spent/N;const bal=paidBy.map((p,i)=>p+contrib[i]-share);
   const ppl=$('#people');ppl.replaceChildren();
